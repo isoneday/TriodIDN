@@ -1,14 +1,21 @@
 package com.training.triodidn;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.IntentSender;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.LocationManager;
-import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.support.v4.app.FragmentActivity;
 import android.util.Log;
+import android.view.View;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
@@ -18,21 +25,33 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.ui.PlaceAutocomplete;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.training.triodidn.helper.GPStrack;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private static final int REQUEST_LOCATION = 1;
     private GoogleMap mMap;
     private GoogleApiClient googleApiClient;
-
+    private GPStrack gpStrack;
+    private double lat;
+    private double lon;
+    private String name_location;
+    private LatLng lokasiku;
+    private Intent intent;
+EditText edtsearch;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -41,6 +60,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        edtsearch = findViewById(R.id.edtsearch);
 
         final LocationManager manager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
         if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER) && hasGPSDevice(this)) {
@@ -152,4 +173,78 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
 
+    public void onLocation(View view) {
+akseslokasiku();
+    }
+
+    private void akseslokasiku() {
+        gpStrack = new GPStrack(MapsActivity.this);
+        if (gpStrack.canGetLocation() && mMap != null) {
+            lat = gpStrack.getLatitude();
+            lon = gpStrack.getLongitude();
+            mMap.clear();
+            name_location = convertname(lat, lon);
+            Toast.makeText(MapsActivity.this, "lat " + lat + "\nlon " + lon, Toast.LENGTH_SHORT).show();
+            lokasiku = new LatLng(lat, lon);
+            //add marker
+            mMap.addMarker(new MarkerOptions().position(lokasiku).title(name_location)).setIcon(
+                    BitmapDescriptorFactory.fromResource(R.mipmap.ic_lokasiku)
+            );
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(lokasiku, 16));
+
+        }
+    }
+
+    private String convertname(double lat, double lon) {
+        name_location = null;
+        Geocoder geocoder = new Geocoder(MapsActivity.this, Locale.getDefault());
+        try {
+            List<Address> list = geocoder.getFromLocation(lat, lon, 1);
+            if (list != null && list.size() > 0) {
+                name_location = list.get(0).getAddressLine(0) + "" + list.get(0).getCountryName();
+
+                //fetch data from addresses
+            } else {
+                Toast.makeText(this, "kosong", Toast.LENGTH_SHORT).show();
+                //display Toast message
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return name_location;
+    }
+
+    public void onSearch(View view) {
+        try {
+            intent = new PlaceAutocomplete.IntentBuilder(PlaceAutocomplete.MODE_OVERLAY).build(MapsActivity.this);
+            startActivityForResult(intent, 1);
+        } catch (GooglePlayServicesRepairableException e) {
+            e.printStackTrace();
+        } catch (GooglePlayServicesNotAvailableException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Place place = PlaceAutocomplete.getPlace(this, data);
+        //getlat dan get lon
+        if (requestCode == 1 && resultCode == RESULT_OK) {
+            lat = place.getLatLng().latitude;
+            lon = place.getLatLng().longitude;
+            name_location = place.getName().toString();
+            edtsearch.setText(name_location);
+            mMap.clear();
+            addmarker(lat, lon);
+        }
+    }
+
+    private void addmarker(double lat, double lon) {
+        lokasiku = new LatLng(lat, lon);
+        name_location = convertname(lat, lon);
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(lokasiku, 15));
+        mMap.addMarker(new MarkerOptions().position(lokasiku).title(name_location));
+
+    }
 }
